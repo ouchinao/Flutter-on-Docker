@@ -7,13 +7,13 @@ RUN ln -fs /usr/share/zoneinfo/Asia/Tokyo /etc/localtime
 WORKDIR /app
 COPY . .
 
-RUN apt-get update && apt-get install -y git vim curl unzip wget cmake libgtk-3-dev x11-apps wget gnupg xz-utils clang ninja-build pkg-config
+RUN apt-get update && apt-get install -y git vim curl unzip wget cmake libgtk-3-dev x11-apps gnupg xz-utils clang ninja-build pkg-config
 
 # Install Chrome
 RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | gpg --dearmor -o /usr/share/keyrings/google-linux-keyring.gpg && \
     echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-linux-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" | tee /etc/apt/sources.list.d/google-chrome.list && \
     apt-get update && \
-    apt-get install -y google-chrome-stable && \
+    apt-get install -y google-chrome-stable > chrome_install.log 2>&1 || cat chrome_install.log && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 ENV CHROME_EXECUTABLE=/usr/bin/google-chrome-stable
@@ -36,12 +36,17 @@ RUN apt-get update && apt-get install -y curl gnupg2 lsb-release
 RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc | apt-key add -
 RUN sh -c 'echo "deb http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
 
-# Install ROS2 packages
+# Setup ROS2 sources
+RUN apt-get update && apt-get install -y curl gnupg2 lsb-release
+RUN curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key | apt-key add -
+RUN sh -c 'echo "deb http://packages.ros.org/ros2/ubuntu $(lsb_release -cs) main" > /etc/apt/sources.list.d/ros2-latest.list'
+
+# Install ROS2 Humble
 RUN apt-get update && apt-get install -y \
-    ros-foxy-desktop \
+    ros-humble-desktop \
     python3-rosdep \
     python3-argcomplete \
-    ros-foxy-rosbridge-server
+    ros-humble-rosbridge-server
 
 # Initialize rosdep
 RUN rosdep init && rosdep update
@@ -51,21 +56,27 @@ SHELL ["/bin/bash", "-c"]
 RUN echo "source /opt/ros/foxy/setup.bash" >> ~/.bashrc
 RUN /bin/bash -c "source ~/.bashrc"
 
-# FIXME: androidの設定が必要
-RUN flutter channel $FLUTTER_VERSION && \
-    flutter upgrade && \
-    flutter config --enable-web && \
-    flutter pub get && \
-    flutter pub outdated
-
-# Chromeをrootユーザーで実行するための設定
+# setup for run Chrome on root
 ARG USERNAME=flutteruser
 RUN useradd -ms /bin/bash $USERNAME && \
     chown -R $USERNAME /flutter && \
     chown -R $USERNAME /app && \
     chown -R $USERNAME /var && \
     chmod -R 777 /app
+
+# run flutter without root
 USER $USERNAME
+WORKDIR /app
+
+# Setup web
+RUN flutter channel $FLUTTER_VERSION && \
+    flutter upgrade && \
+    flutter config --enable-web && \
+    flutter pub get && \
+    flutter pub outdated > flutter_setup.log 2>&1 || cat flutter_setup.log
+
+# root
+USER root
 
 # Start rosbridge server
 CMD ["ros2", "launch", "rosbridge_server", "rosbridge_websocket_launch.xml"]
