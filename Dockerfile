@@ -73,7 +73,8 @@ RUN flutter channel $FLUTTER_VERSION && \
     flutter upgrade && \
     flutter config --enable-web && \
     flutter pub get && \
-    flutter pub outdated > flutter_setup.log 2>&1 || cat flutter_setup.log
+    flutter pub outdated > flutter_setup.log 2>&1 || true && cat flutter_setup.log
+
 
 # root
 USER root
